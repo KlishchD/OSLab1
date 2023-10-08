@@ -27,8 +27,7 @@ private:
     std::vector<std::thread> threads;
 
     void readResult(const std::string& path, Result& result);
-    void runFunction(float x, char function, std::map<float, Result>& table, std::promise<Result>&& future);
-    void runFunction(float x, char function, std::promise<Result>&& promise);
+    void runFunction(float x, char function, std::map<float, Result>& table, std::promise<Result>&& promise);
 };
 
 
