@@ -25,10 +25,5 @@ int main(int argc, TCHAR *argv[]) {
     }
 
     std::cout << result << std::endl;
-
-    for (int i = 0; i < argc; ++i) {
-        std::cout << std::string(argv[i]) << std::endl;
-    }
-
     return 0;
 }
