@@ -12,22 +12,32 @@
 #include <map>
 #include "Result.h"
 
+struct RunResults {
+    float value;
+    int status;
+    Result fResult;
+    Result gResult;
+};
+
 class Manager {
 public:
-    Result runFunctions(float x);
+    using callback = std::function<void(char, const Result&)>;
+    RunResults runFunctions(float x, const callback& fCallback, const callback& gCallback);
     void setTimeLimit(float inTimeLimit);
 private:
-    std::mutex lock;
+    std::mutex resultReadLock;
+    std::mutex outputLock;
 
     float timeLimit;
+    int maxRetryCount = 10;
 
     std::map<float, Result> fResults;
     std::map<float, Result> gResults;
 
-    std::vector<std::thread> threads;
 
     void readResult(const std::string& path, Result& result);
-    void runFunction(float x, char function, std::map<float, Result>& table, std::promise<Result>&& promise);
+    std::thread runFunctionPromise(float x, char function, std::map<float, Result>& table, std::promise<Result>&& promise);
+    std::thread runFunction(float x, char function, std::map<float, Result>& table, Result& result, const callback& callback);
 };
 
 

@@ -10,8 +10,8 @@
 
 struct Result {
     float value;
-    int nonCriticalErrorCount;
-    bool isSuccessful;
+    int status;
+    int retries;
 
     friend std::ostream& operator<<(std::ostream& ostream, const Result& result);
     friend std::istream& operator>>(std::istream& istream, Result& result);

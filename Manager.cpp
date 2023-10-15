@@ -6,9 +6,10 @@
 
 #include "Manager.h"
 #include "Utils.h"
+#include "StatusCodes.h"
 
-void Manager::runFunction(float x, char function, std::map<float, Result>& table, std::promise<Result> &&promise) {
-    std::thread fFunction([this, x, function, &table, &promise]() {
+std::thread Manager::runFunctionPromise(float x, char function, std::map<float, Result>& table, std::promise<Result> &&promise) {
+    std::thread thread([this, x, function, &table, &promise]() {
         if (table.count(x)) {
             promise.set_value(table[x]);
             return;
@@ -38,50 +39,74 @@ void Manager::runFunction(float x, char function, std::map<float, Result>& table
             std::string path = std::string(1, function) + "out.txt";
             readResult(path, result);
         } else {
-            result = {0.0f, 0, false};
+            result = {0.0f, RESULT_STATUS_TIMEOUT};
         }
 
-        table[x] = result;
         promise.set_value(result);
 
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
     });
-    threads.push_back(std::move(fFunction));
+
+    return thread;
 }
 
 void Manager::readResult(const std::string& path, Result& result) {
-    lock.lock();
+    resultReadLock.lock();
     Utils::setUpInput(path);
     std::cin >> result;
-    lock.unlock();
+    resultReadLock.unlock();
 }
 
-Result Manager::runFunctions(float x) {
-    std::promise<Result> fPromise;
-    std::future<Result> fFuture = fPromise.get_future();
+RunResults Manager::runFunctions(float x, const callback& fCallback, const callback& gCallback) {
+    std::vector<std::thread> threads;
 
-    std::promise<Result> gPromise;
-    std::future<Result> gFuture = gPromise.get_future();
-
-    runFunction(x, 'f', fResults, std::move(fPromise));
-    runFunction(x, 'g', gResults, std::move(gPromise));
-
-    Result fResult = fFuture.get();
-    Result gResult = gFuture.get();
+    Result fResult, gResult;
+    threads.push_back(runFunction(x, 'f', fResults, fResult, fCallback));
+    threads.push_back(runFunction(x, 'g', gResults, gResult, gCallback));
 
     for (std::thread &thread: threads) {
         thread.join();
     }
-    threads.clear();
 
-    if (fResult.isSuccessful && gResult.isSuccessful) {
-        return {fResult.value + gResult.value, fResult.nonCriticalErrorCount + gResult.nonCriticalErrorCount, true};
+    int status = RESULT_STATUS_HARD_FAULT;
+    if (fResult.status == RESULT_STATUS_OK && gResult.status == RESULT_STATUS_OK) {
+        status = RESULT_STATUS_OK;
+    } else if (fResult.status != RESULT_STATUS_OK && gResult.status != RESULT_STATUS_OK) {
+        status = RESULT_FAILED_BOTH;
+    } else if (fResult.status == RESULT_STATUS_OK) {
+        status = RESULT_FAILED_G;
+    } else if (gResult.status == RESULT_STATUS_OK) {
+        status = RESULT_FAILED_F;
     }
 
-    return {(float) !fResult.isSuccessful + 2 * !gResult.isSuccessful, 0, false};
+    return { fResult.value + gResult.value, status, fResult, gResult };
 }
 
 void Manager::setTimeLimit(float inTimeLimit) {
     timeLimit = inTimeLimit;
+}
+
+std::thread Manager::runFunction(float x, char function, std::map<float, Result>& table, Result& result, const callback& callback) {
+    std::thread run([x, function, &table, &result, this, &callback]() {
+        int retry = -1;
+        do {
+            std::promise<Result> promise;
+            std::future<Result> future = promise.get_future();
+            runFunctionPromise(x, function, table, std::move(promise)).join();
+            result = future.get();
+
+            ++retry;
+        } while(result.status != RESULT_STATUS_OK && result.status != RESULT_STATUS_HARD_FAULT && retry < maxRetryCount);
+
+        result.retries = retry;
+
+        table[x] = result;
+
+        callback(function, result);
+
+        return 0;
+    });
+
+    return run;
 }

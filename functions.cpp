@@ -3,16 +3,21 @@
 #include <thread>
 #include "Result.h"
 #include "Utils.h"
+#include "StatusCodes.h"
 
 Result f(float x) {
-    return { x * x, 0, true };
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(0.5s + std::chrono::seconds(rand() % 2));
+    return { x * x, RESULT_STATUS_OK + (rand() % 2) };
 }
 
 Result g(float x) {
-    return { x, 0, true };
+    return {x, RESULT_STATUS_OK };
 }
 
 int main(int argc, TCHAR *argv[]) {
+    srand (time(NULL));
+
     Utils::setUpOutput(std::string(argv[2]) + "out.txt");
 
     float x = std::stof(argv[1]);
